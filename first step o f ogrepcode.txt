@@ -1,0 +1,75 @@
+OgreOpcode轻松实现碰撞检测
+OgreOpcode 是一套轻量级的碰撞检测库,
+提供了包括 raycheck, sweptSphere 等基本的碰撞检测算法.
+但其只提供碰撞检测部分, 其碰撞反映部分并未提供.
+
+要是早知道有这么好用的代码的话, 以前写碰撞处理过程的时候也不会去做那么多愚蠢的事情了.  
+
+下面就举一个最简单的,射线碰撞的例子
+首先不废话要包含相应的头文件.并使用命名空间
+#include "Ogre/Ogre.h"
+#include "OgreOpcode/OgreOpcode.h"
+
+using namespace Ogre;
+using namespace OgreOpcode;
+然后创建CollisionManager,并选择场景管理器
+static CollisionManager cm( pSceneManager );
+CollisionManager::getSingletonPtr()->setSceneManager( pSceneManager );
+然后添加个碰撞类,并添加碰撞类型.
+CollisionManager::getSingletonPtr()->addCollClass( "blocker" );
+CollisionManager::getSingletonPtr()->addCollType( "blocker", "blocker", COLLTYPE_EXACT);
+再创建个碰撞设备
+m_pCollisionContext = CollisionManager::getSingletonPtr()->createContext( "test" );
+将需要碰撞的ENTITY加入碰撞设备中去.
+void CollisionTest::AddStaticEntity( Entity* pEntity )
+{
+EntityCollisionShape* pCollisionShape = CollisionManager::getSingletonPtr()->createEntityCollisionShape( pEntity->getName() );
+pCollisionShape->load( pEntity );
+CollisionObject* pCollisionObject = m_pCollisionContext->createObject( pEntity->getName() );
+pCollisionObject->setCollClass( "blocker" );
+pCollisionObject->setShape( pCollisionShape );
+m_pCollisionContext->addObject( pCollisionObject );
+}
+将某个ENTITY从碰撞设备中移去
+void CollisionTest::RemoveStaticEntity( Ogre::Entity* pEntity )
+{
+  ICollisionShape* pShape = CollisionManager::getSingletonPtr()->getShape( pEntity->getName() );
+  if( NULL != pShape )
+  {
+    CollisionManager::getSingletonPtr()->destroyShape( pShape );
+  }
+
+  CollisionObject* pObject = NULL;
+  try
+  {
+    pObject = m_pCollisionContext->getAttachedObject( pEntity->getName() );
+  }
+  catch( ... )
+  {
+    return;
+  }
+
+  m_pCollisionContext->destroyObject( pObject );
+}
+下面就是关键的射线测试了
+其返回一个点集
+const VECTORLIST& CollisionTest::RayTest( const Ray& ray, const Real fDistance )
+{
+  m_oldTestRay = ray;
+  m_oldTestDistance = fDistance;
+
+  m_pCollisionContext->reset();
+
+  CollisionPair** ppCollisionPair = NULL;
+  if( m_pCollisionContext->rayCheck( ray, fDistance, COLLTYPE_EXACT, COLLTYPE_ALWAYS_EXACT, ppCollisionPair ) > 0 )
+  {
+    int iCollisionCount = m_pCollisionContext->getNumCollisions();
+    m_listVector.clear();
+    for( int i = 0; i < iCollisionCount; i ++ )
+    {
+      m_listVector.push_back( ppCollisionPair->contact );
+    }
+  }
+
+  return( m_listVector ); 
+}
